@@ -199,6 +199,28 @@
         let policeLightR, policeLightB, peer = null, activeConn = null;
 
 
+       const peerConfig = {
+         debug: 2, // 開 debug（可看到連線細節）
+         config: {
+             iceServers: [
+                 { urls: 'stun:stun.l.google.com:19302' },
+     
+                 // 🔥 TURN（關鍵）
+                 {
+                     urls: 'turn:openrelay.metered.ca:80',
+                     username: 'openrelayproject',
+                     credential: 'openrelayproject'
+                 },
+                 {
+                     urls: 'turn:openrelay.metered.ca:443',
+                     username: 'openrelayproject',
+                     credential: 'openrelayproject'
+                 }
+             ]
+         }
+     };
+
+
 
         function updateSetting(type, val) {
 
@@ -228,7 +250,8 @@
 
             const id = Math.floor(1000 + Math.random() * 8999).toString();
 
-            peer = new Peer(id);
+            //peer = new Peer(id);
+            peer = new Peer(id, peerConfig);
 
             peer.on('open', resId => document.getElementById('my-id').innerText = resId);
 
@@ -256,87 +279,102 @@
 
             });
 
+         peer.on('error', err => {
+             console.error("PC Peer error:", err);
+         });
+
         }
 
 
 
-        // 💡 加入 STUN 配置，增加 iPhone 穿透行動網路連線成功率
-const peerConfig = { 
-    config: { 'iceServers': [{ 'urls': 'stun:stun.l.google.com:19302' }] } 
-};
-
 async function connectToPC() {
     const targetID = document.getElementById('peer-id-input').value;
+
     if (!targetID) {
         alert("請輸入電腦 ID");
         return;
     }
 
-    // 💡 重要：iOS 13+ 必須在點擊按鈕的第一時間請求陀螺儀權限
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+    // 📱 iOS 體感權限
+    if (typeof DeviceOrientationEvent !== 'undefined' &&
+        typeof DeviceOrientationEvent.requestPermission === 'function') {
         try {
             const permission = await DeviceOrientationEvent.requestPermission();
             if (permission !== 'granted') {
-                alert("你需要允許「動作與方向」權限才能使用體感控制喔！");
+                alert("需要允許動作與方向權限");
                 return;
             }
-        } catch (error) {
-            console.error("權限請求錯誤:", error);
+        } catch (e) {
+            console.error(e);
         }
     }
 
-    // 啟動 PeerJS
+    // 🔥 使用 TURN config
     peer = new Peer(peerConfig);
 
     peer.on('open', () => {
-        const conn = peer.connect(targetID);
+        console.log("手機 Peer 開啟");
+
+        const conn = peer.connect(targetID, {
+            reliable: true
+        });
+
         activeConn = conn;
 
         conn.on('open', () => {
-            // 隱藏輸入框
+            console.log("✅ 已連線到 PC");
+
             document.getElementById('setup-area').style.display = 'none';
-            
-            // 顯示成功文字
             const hint = document.getElementById('remote-hint');
             hint.style.display = 'block';
 
-            // 接收電腦端傳來的操控模式 (體感或觸控)
             conn.on('data', data => {
                 if (data.type === 'mode') {
+
                     if (data.value === 'remTilt') {
-                        hint.innerHTML = "✅ 連線成功！<br>請左右傾斜手機控制";
-                        // 註冊體感事件
+                        hint.innerHTML = "✅ 體感模式";
+
+                        let smooth = 0;
+
                         window.addEventListener('deviceorientation', e => {
-                            if (activeConn && activeConn.open) {
-                                activeConn.send({ type: 'tilt', value: e.gamma });
+                            smooth = smooth * 0.8 + e.gamma * 0.2;
+
+                            if (activeConn?.open) {
+                                activeConn.send({
+                                    type: 'tilt',
+                                    value: smooth
+                                });
                             }
                         });
+
                     } else {
-                        hint.innerHTML = "✅ 連線成功！<br>請點擊螢幕兩側控制";
+                        hint.innerHTML = "✅ 觸控模式";
                         document.getElementById('touch-controller').style.display = 'flex';
                     }
                 }
             });
         });
 
-        // 監聽斷線
         conn.on('close', () => {
-            alert("與電腦的連線已斷開");
+            alert("連線中斷");
             location.reload();
+        });
+
+        conn.on('error', err => {
+            console.error("Conn error:", err);
         });
     });
 
     peer.on('error', err => {
+        console.error("Peer error:", err);
+
         if (err.type === 'peer-unavailable') {
-            alert("找不到電腦！請確認電腦上的 ID 是否正確。");
-        } else if (err.type === 'webrtc') {
-            alert("WebRTC 錯誤：請確認是否使用 HTTPS 開啟，且未使用 LINE 內建瀏覽器。");
+            alert("找不到電腦 ID");
         } else {
-            alert("連線出錯了：" + err.type);
+            alert("WebRTC 錯誤：" + err.type);
         }
     });
 }
-
 
 
         function sendRemoteCmd(side) { if(activeConn) activeConn.send({ type: 'touch', value: side }); }
