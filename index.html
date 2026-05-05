@@ -288,23 +288,7 @@
         }
 
 
-     let lastSend = 0;
-let smooth = 0;
-
-window.addEventListener("deviceorientation", e => {
-    if (!client) return;
-
-    const now = Date.now();
-    if (now - lastSend < 50) return; // 限制頻率（20fps）
-    lastSend = now;
-
-    smooth = smooth * 0.8 + e.gamma * 0.2;
-
-    client.publish(topic, JSON.stringify({
-        type: "tilt",
-        value: smooth
-    }), { qos: 0 });
-});
+     
 
 
 
@@ -613,6 +597,11 @@ async function connectToPC() {
         }
 
 
+      let lastSend = 0;
+      let smooth = 0;
+
+
+
 
         function initControls() {
 
@@ -620,7 +609,22 @@ async function connectToPC() {
 
             window.addEventListener('touchstart', e => { if (!gameStarted || settings.ctrl !== 'touch') return; if (e.touches[0].clientX < window.innerWidth / 2) moveLane(-1); else moveLane(1); });
 
-            window.addEventListener('deviceorientation', e => { if (!gameStarted || settings.ctrl !== 'tilt') return; handleTilt(e.gamma); });
+            //window.addEventListener('deviceorientation', e => { if (!gameStarted || settings.ctrl !== 'tilt') return; handleTilt(e.gamma); });
+
+           window.addEventListener("deviceorientation", e => {
+    if (!client) return;
+
+    const now = Date.now();
+    if (now - lastSend < 50) return; // 限制頻率（20fps）
+    lastSend = now;
+
+    smooth = smooth * 0.8 + e.gamma * 0.2;
+
+    client.publish(topic, JSON.stringify({
+        type: "tilt",
+        value: smooth
+    }), { qos: 0 });
+});
 
         }
 
