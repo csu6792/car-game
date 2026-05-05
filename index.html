@@ -200,25 +200,19 @@
 
 
        const peerConfig = {
-         debug: 2, // 開 debug（可看到連線細節）
-         config: {
-             iceServers: [
-                 { urls: 'stun:stun.l.google.com:19302' },
-     
-                 // 🔥 TURN（關鍵）
-                 {
-                     urls: 'turn:openrelay.metered.ca:80',
-                     username: 'openrelayproject',
-                     credential: 'openrelayproject'
-                 },
-                 {
-                     urls: 'turn:openrelay.metered.ca:443',
-                     username: 'openrelayproject',
-                     credential: 'openrelayproject'
-                 }
-             ]
-         }
-     };
+          debug: 2,
+          config: {
+              iceServers: [
+                  { urls: 'stun:stun.l.google.com:19302' },
+                  {
+                      urls: 'turn:openrelay.metered.ca:80',
+                      username: 'openrelayproject',
+                      credential: 'openrelayproject'
+                  }
+              ],
+              iceTransportPolicy: "relay" // 🔥 強制走 TURN
+          }
+      };
 
 
 
