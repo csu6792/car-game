@@ -10,8 +10,6 @@
 
     <title>賽車小遊戲-亡命飆速 </title>
 
-    <script src="https://unpkg.com/peerjs@1.3.1/dist/peerjs.min.js"></script>
-
     <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 
     <style>
@@ -206,23 +204,6 @@
         let isPC = false;
 
 
-       const peerConfig = {
-          debug: 2,
-          config: {
-              iceServers: [
-                  { urls: 'stun:stun.l.google.com:19302' },
-                  {
-                      urls: 'turn:openrelay.metered.ca:80',
-                      username: 'openrelayproject',
-                      credential: 'openrelayproject'
-                  }
-              ],
-              iceTransportPolicy: "relay" // 🔥 強制走 TURN
-          }
-      };
-
-
-
         function updateSetting(type, val) {
 
             settings[type] = val;
@@ -235,7 +216,6 @@
 
             document.getElementById('remote-info').style.display = isRemote ? 'block' : 'none';
 
-           // if (isRemote) initPeerAsPC();
             if (isRemote) initMQTTasPC();
 
         }
@@ -246,135 +226,142 @@
 
 
 
-        function initPeerAsPC() {
+		function initMQTTasPC() {
+			if (client) return;
 
-            if (peer) return;
+			isPC = true;
 
-            const id = Math.floor(1000 + Math.random() * 8999).toString();
+			// 產生 4 位數房間
+			roomID = Math.floor(1000 + Math.random() * 8999).toString();
+			topic = "racing-game/" + roomID;
 
-            //peer = new Peer(id);
-            peer = new Peer(id, peerConfig);
+			document.getElementById('my-id').innerText = roomID;
 
-            peer.on('open', resId => document.getElementById('my-id').innerText = resId);
+			client = mqtt.connect("wss://mqttgo.io:8084/mqtt")
+			  
 
-            peer.on('connection', c => {
+			client.on("connect", () => {
+				console.log("✅ PC 已連線 MQTT");
+				client.subscribe(topic);
+				setInterval(() => {
+					if (!gameStarted) { // 遊戲開始前持續廣播模式設定
+						client.publish(topic, JSON.stringify({ 
+							type: 'mode', 
+							value: settings.ctrl 
+						}));
+					}
+				}, 2000);
+			});
 
-                activeConn = c;
+			client.on("message", (t, msg) => {
+				const data = JSON.parse(msg.toString());
+				
+				if (data.type === "join" || data.type === "tilt" || data.type === "touch") {
+					const idDisplay = document.getElementById('my-id');
+					idDisplay.innerText = "✅ 手機已連線";
+					idDisplay.style.color = "#00ffcc";
+				}
 
-                document.getElementById('my-id').innerText = "✅ 手機已連線";
+				if (data.type === "tilt" && settings.ctrl === "remTilt") {
+					handleTilt(data.value);
+				}
 
-                // 💡 連線成功後告訴手機現在是什麼模式
+				if (data.type === "touch" && settings.ctrl === "remTouch") {
+					if (data.value === "L") moveLane(-1);
+					else moveLane(1);
+				}
+			});
 
-                c.on('open', () => c.send({ type: 'mode', value: settings.ctrl }));
-
-                c.on('data', data => {
-
-                    if (data.type === 'tilt' && settings.ctrl === 'remTilt') handleTilt(data.value);
-
-                    if (data.type === 'touch' && settings.ctrl === 'remTouch') {
-
-                        if(data.value === 'L') moveLane(-1); else moveLane(1);
-
-                    }
-
-                });
-
-            });
-
-         peer.on('error', err => {
-             console.error("PC Peer error:", err);
-         });
-
-        }
-
-
-     
-
-
-
-     function initMQTTasPC() {
-    if (client) return;
-
-    isPC = true;
-
-    // 產生 4 位數房間
-    roomID = Math.floor(1000 + Math.random() * 8999).toString();
-    topic = "racing-game/" + roomID;
-
-    document.getElementById('my-id').innerText = roomID;
-
-    client = mqtt.connect("wss://mqttgo.io:8084/mqtt")
-      
-
-    client.on("connect", () => {
-        console.log("✅ PC 已連線 MQTT");
-        client.subscribe(topic);
-    });
-
-    client.on("message", (t, msg) => {
-        const data = JSON.parse(msg.toString());
-
-        if (data.type === "tilt" && settings.ctrl === "remTilt") {
-            handleTilt(data.value);
-        }
-
-        if (data.type === "touch" && settings.ctrl === "remTouch") {
-            if (data.value === "L") moveLane(-1);
-            else moveLane(1);
-        }
-    });
-
-    client.on("error", err => {
-        console.error("MQTT error:", err);
-    });
-}
+			client.on("error", err => {
+				console.error("MQTT error:", err);
+			});
+		}
 
 
 
-async function connectToPC() {
-    roomID = document.getElementById('peer-id-input').value;
+		async function connectToPC() {
+			roomID = document.getElementById('peer-id-input').value;
+			if (!roomID) { alert("請輸入房間ID"); return; }
 
-    if (!roomID) {
-        alert("請輸入房間ID");
-        return;
-    }
+			topic = "racing-game/" + roomID;
 
-    topic = "racing-game/" + roomID;
+		
+			if (typeof DeviceOrientationEvent !== 'undefined' &&
+				typeof DeviceOrientationEvent.requestPermission === 'function') {
+				try { await DeviceOrientationEvent.requestPermission(); } catch (e) {}
+			}
 
-    // iPhone 體感權限
-    if (typeof DeviceOrientationEvent !== 'undefined' &&
-        typeof DeviceOrientationEvent.requestPermission === 'function') {
-        try {
-            await DeviceOrientationEvent.requestPermission();
-        } catch (e) {}
-    }
+			client = mqtt.connect("wss://mqttgo.io:8084/mqtt")
 
-    client = mqtt.connect("wss://mqttgo.io:8084/mqtt")
+			client.on("connect", () => {
+				console.log("📱 手機已連線 MQTT");
+				client.subscribe(topic);
+				document.getElementById('setup-area').style.display = 'none';
+				document.getElementById('remote-hint').style.display = 'block';
+				document.getElementById('remote-hint').innerText = "⏳ 等待 PC 確認模式...";
+				client.publish(topic, JSON.stringify({ type: "join", value: "mobile_ready" }));
+			});
 
-    client.on("connect", () => {
-        console.log("📱 手機已連線 MQTT");
+			client.on("message", (t, msg) => {
+				const data = JSON.parse(msg.toString());
 
-        document.getElementById('setup-area').style.display = 'none';
+			
+				if (data.type === 'mode') {
+					const hint = document.getElementById('remote-hint');
+					
+					if (data.value === 'remTilt') {
+						hint.innerHTML = "✅ 體感模式<br>請傾斜手機控制";
+						document.getElementById('touch-controller').style.display = 'none';
+						
+				
+						window.addEventListener('deviceorientation', sendTiltData);
+					} else if (data.value === 'remTouch') {
+						hint.innerHTML = "✅ 觸控模式<br>請點擊左右按鈕";
+						document.getElementById('touch-controller').style.display = 'flex';
+						
+				
+						window.removeEventListener('deviceorientation', sendTiltData);
+					}
+				}
+				
+				if (data.type === 'game_over') {
+					// 做法 A：直接重新整理頁面（最乾淨，回到輸入 ID 的畫面）
+					alert("遊戲已結束，點擊確定回到主畫面");
+					location.reload(); 
 
-        const hint = document.getElementById('remote-hint');
-        hint.style.display = 'block';
-        hint.innerHTML = "✅ 已連線<br>左右點擊或傾斜手機";
+					/* 
+					// 做法 B：不重新整理，只切換 UI（如果你不想重新輸入 ID）
+					document.getElementById('remote-hint').style.display = 'none';
+					document.getElementById('touch-controller').style.display = 'none';
+					document.getElementById('setup-area').style.display = 'block'; // 顯示連線輸入框
+					window.removeEventListener('deviceorientation', sendTiltData); 
+					*/
+				}
+			});
+		}
 
-        document.getElementById('touch-controller').style.display = 'flex';
-    });
-}
 
+		function sendTiltData(e) {
+			const now = Date.now();
+			if (now - lastSend < 50) return; 
+			lastSend = now;
+			smooth = smooth * 0.8 + e.gamma * 0.2;
+			
+			client.publish(topic, JSON.stringify({
+				type: "tilt",
+				value: smooth
+			}), { qos: 0 });
+		}
 
-        //function sendRemoteCmd(side) { if(activeConn) activeConn.send({ type: 'touch', value: side }); }
 
        function sendRemoteCmd(side) {
-    if (!client) return;
+			if (!client) return;
 
-    client.publish(topic, JSON.stringify({
-        type: "touch",
-        value: side
-    }), { qos: 1 });
-}
+			client.publish(topic, JSON.stringify({
+				type: "touch",
+				value: side
+			}), { qos: 1 });
+		}
 
         function moveLane(dir) { currentLaneIndex = Math.max(0, Math.min(2, currentLaneIndex + dir)); targetX = lanes[currentLaneIndex]; }
 
@@ -422,13 +409,13 @@ async function connectToPC() {
 
             const loader = new THREE.GLTFLoader();
 
-            loader.load('car.glb', (g) => { car = g.scene; car.scale.set(4.5, 4.5, 4.5); scene.add(car); car.position.z = 15; });
+            loader.load('/static/car.glb', (g) => { car = g.scene; car.scale.set(4.5, 4.5, 4.5); scene.add(car); car.position.z = 15; });
 
-            loader.load('nintendogs_street_light.glb', (g) => { streetLightModel = g.scene; });
+            loader.load('/static/nintendogs_street_light.glb', (g) => { streetLightModel = g.scene; });
 
-            ['car1.glb','car2.glb','car3.glb','car4.glb','car5.glb','car6.glb'].forEach(f => { loader.load(f, (g) => { obsCarModels[f] = g.scene; }); });
+            ['car1.glb','car2.glb','car3.glb','car4.glb','car5.glb','car6.glb'].forEach(f => { loader.load('/static/'+f, (g) => { obsCarModels[f] = g.scene; }); });
 
-            const loadTree = (f, idxs) => { loader.load(f, (g) => { g.scene.traverse(n => { if(n.isMesh) idxs.forEach(i => decorPool[i].push(n.clone())); }); }); };
+            const loadTree = (f, idxs) => { loader.load('/static/'+f, (g) => { g.scene.traverse(n => { if(n.isMesh) idxs.forEach(i => decorPool[i].push(n.clone())); }); }); };
 
             loadTree('birch_trees_pack__ps1_low_poly.glb', [0, 1]); loadTree('pine_trees_pack__ps1_low_poly.glb', [2]); loadTree('snowy_pine_trees_pack__ps1_low_poly.glb', [3]);
 
@@ -484,7 +471,7 @@ async function connectToPC() {
 
         function updateHPBar() { document.getElementById('hp-bar').style.width = hp + "%"; }
 
-        function endGame() { gameStarted = false; setTimeout(() => { alert("💥 Game Over！得分: " + score); location.reload(); }, 100); }
+        function endGame() { gameStarted = false; if (client && client.connected) {client.publish(topic, JSON.stringify({ type: "game_over" }));} setTimeout(() => { alert("💥 Game Over！得分: " + score); location.reload(); }, 100); }
 
 
 
@@ -609,22 +596,20 @@ async function connectToPC() {
 
             window.addEventListener('touchstart', e => { if (!gameStarted || settings.ctrl !== 'touch') return; if (e.touches[0].clientX < window.innerWidth / 2) moveLane(-1); else moveLane(1); });
 
-            //window.addEventListener('deviceorientation', e => { if (!gameStarted || settings.ctrl !== 'tilt') return; handleTilt(e.gamma); });
+			window.addEventListener("deviceorientation", e => {
+				if (!client) return;
 
-           window.addEventListener("deviceorientation", e => {
-    if (!client) return;
+				const now = Date.now();
+				if (now - lastSend < 50) return; // 限制頻率（20fps）
+				lastSend = now;
 
-    const now = Date.now();
-    if (now - lastSend < 50) return; // 限制頻率（20fps）
-    lastSend = now;
+				smooth = smooth * 0.8 + e.gamma * 0.2;
 
-    smooth = smooth * 0.8 + e.gamma * 0.2;
-
-    client.publish(topic, JSON.stringify({
-        type: "tilt",
-        value: smooth
-    }), { qos: 0 });
-});
+				client.publish(topic, JSON.stringify({
+					type: "tilt",
+					value: smooth
+				}), { qos: 0 });
+			});
 
         }
 
