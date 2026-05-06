@@ -349,7 +349,7 @@ async function connectToPC() {
         } catch (e) {}
     }
 
-    client = mqtt.connect("wss://broker.emqx.io:8084/mqtt");
+    client = mqtt.connect("wss://mqttgo.io:8084/mqtt")
 
     client.on("connect", () => {
         console.log("📱 手機已連線 MQTT");
