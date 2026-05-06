@@ -409,13 +409,13 @@
 
             const loader = new THREE.GLTFLoader();
 
-            loader.load('/static/car.glb', (g) => { car = g.scene; car.scale.set(4.5, 4.5, 4.5); scene.add(car); car.position.z = 15; });
+            loader.load('car.glb', (g) => { car = g.scene; car.scale.set(4.5, 4.5, 4.5); scene.add(car); car.position.z = 15; });
 
-            loader.load('/static/nintendogs_street_light.glb', (g) => { streetLightModel = g.scene; });
+            loader.load('nintendogs_street_light.glb', (g) => { streetLightModel = g.scene; });
 
-            ['car1.glb','car2.glb','car3.glb','car4.glb','car5.glb','car6.glb'].forEach(f => { loader.load('/static/'+f, (g) => { obsCarModels[f] = g.scene; }); });
+            ['car1.glb','car2.glb','car3.glb','car4.glb','car5.glb','car6.glb'].forEach(f => { loader.load('f, (g) => { obsCarModels[f] = g.scene; }); });
 
-            const loadTree = (f, idxs) => { loader.load('/static/'+f, (g) => { g.scene.traverse(n => { if(n.isMesh) idxs.forEach(i => decorPool[i].push(n.clone())); }); }); };
+            const loadTree = (f, idxs) => { loader.load('f, (g) => { g.scene.traverse(n => { if(n.isMesh) idxs.forEach(i => decorPool[i].push(n.clone())); }); }); };
 
             loadTree('birch_trees_pack__ps1_low_poly.glb', [0, 1]); loadTree('pine_trees_pack__ps1_low_poly.glb', [2]); loadTree('snowy_pine_trees_pack__ps1_low_poly.glb', [3]);
 
